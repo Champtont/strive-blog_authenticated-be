@@ -1,68 +1,97 @@
 import express from "express";
-import fs from "fs-extra";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-import uniqid from "uniqid";
-import {
-  getAuthors,
-  writeAuthors,
-  getBlogs,
-  writeBlogs,
-} from "../../lib/fs-tools.js";
-
-const authorsJSONPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../data/authors.json"
-);
-
-console.log("target -->", authorsJSONPath);
+import { adminOnlyMiddleware } from "../../lib/auth/adminOnly.js";
+import { basicAuthMiddleware } from "../../lib/auth/basicAuth.js";
+import AuthorsModel from "./model.js";
 
 const authorsRouter = express.Router();
 
-//1 Get authors
-authorsRouter.get("/", async (req, res) => {
-  const fileContent = fs.readFileSync(authorsJSONPath);
-  const authors = JSON.parse(fileContent);
-  res.send(authors);
+AuthorsRouter.post("/", async (req, res, next) => {
+  try {
+    const newAuthor = new AuthorsModel(req.body);
+    const { _id } = await newAuthor.save();
+    res.status(201).send({ _id });
+  } catch (error) {
+    next(error);
+  }
 });
 
-//2 Get single author
-authorsRouter.get("/:authorId", (req, res) => {
-  const authorID = req.params.authorId;
-  const authorsArray = JSON.parse(fs.readFileSync(authorsJSONPath));
-  const foundAuthor = authorsArray.find((author) => author.id === authorID);
-  res.send(foundAuthor);
+AuthorsRouter.get(
+  "/",
+  basicAuthMiddleware,
+  adminOnlyMiddleware,
+  async (req, res, next) => {
+    try {
+      const authors = await AuthorsModel.find({});
+      res.send(authors);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+AuthorsRouter.get("/me", basicAuthMiddleware, async (req, res, next) => {
+  try {
+    res.send(req.author);
+  } catch (error) {
+    next(error);
+  }
 });
-//3 Post author
-authorsRouter.post("/", (req, res) => {
-  console.log("REQUEST BODY: ", req.body);
-  const newAuthor = { ...req.body, createdAt: new Date(), id: uniqid() };
-  console.log("NEW AUTHOR: ", newAuthor);
-  const authorsArray = JSON.parse(fs.readFileSync(authorsJSONPath));
-  authorsArray.push(newAuthor);
-  fs.writeFileSync(authorsJSONPath, JSON.stringify(authorsArray));
-  res.status(201).send({ id: newAuthor.id });
+
+AuthorsRouter.put("/me", basicAuthMiddleware, async (req, res, next) => {
+  try {
+    const updatedAuthor = await AuthorsModel.findByIdAndUpdate(
+      req.author._id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+    res.send(updatedAuthor);
+  } catch (error) {
+    next(error);
+  }
 });
-//4 Put author
-authorsRouter.put("/:authorId", (req, res) => {
-  const authorID = req.params.authorId;
-  const authorsArray = JSON.parse(fs.readFileSync(authorsJSONPath));
-  const index = authorsArray.findIndex((author) => author.id === authorID);
-  const oldAuthor = authorsArray[index];
-  const updatedAuthor = { ...oldAuthor, ...req.body, updatedAt: new Date() };
-  authorsArray[index] = updatedAuthor;
-  fs.writeFileSync(authorsJSONPath, JSON.stringify(authorsArray));
-  res.send(updatedAuthor);
+
+AuthorsRouter.delete("/me", basicAuthMiddleware, async (req, res, next) => {
+  try {
+    await AuthorsModel.findByIdAndUpdate(req.author._id);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 });
-//5 Delete author
-authorsRouter.delete("/:authorId", (req, res) => {
-  const authorID = req.params.authorId;
-  const authorsArray = JSON.parse(fs.readFileSync(authorsJSONPath));
-  const remainingAuthors = authorsArray.filter(
-    (author) => author.id !== authorID
-  );
-  fs.writeFileSync(authorsJSONPath, JSON.stringify(remainingAuthors));
-  res.status(204).send();
+
+AuthorsRouter.get("/:authorId", basicAuthMiddleware, async (req, res, next) => {
+  try {
+    const author = await AuthorsModel.findById(req.params.authorId);
+    res.send(author);
+  } catch (error) {
+    next(error);
+  }
 });
+AuthorsRouter.put(
+  "/:authorId",
+  basicAuthMiddleware,
+  adminOnlyMiddleware,
+  async (req, res, next) => {
+    try {
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+AuthorsRouter.delete(
+  "/:authorId",
+  basicAuthMiddleware,
+  adminOnlyMiddleware,
+  async (req, res, next) => {
+    try {
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default authorsRouter;
